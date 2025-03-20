@@ -7,7 +7,7 @@ app = func.FunctionApp()
 # Variable globale pour stocker la dernière requête
 last_received_data = None
 
-@app.route(route="vapi-webhook", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="vapi-webhook", auth_level=func.AuthLevel.FUNCTION)
 async def vapi_webhook(req: func.HttpRequest) -> func.HttpResponse:
     global last_received_data
     logging.info('Requête VAPI reçue')
