@@ -1,3 +1,4 @@
+import os
 import azure.functions as func
 import logging
 import json
@@ -7,10 +8,19 @@ app = func.FunctionApp()
 # Variable globale pour stocker la dernière requête
 last_received_data = None
 
-@app.route(route="vapi-webhook", auth_level=func.AuthLevel.FUNCTION)
+@app.route(route="vapi-webhook", auth_level=func.AuthLevel.ANONYMOUS)
 async def vapi_webhook(req: func.HttpRequest) -> func.HttpResponse:
     global last_received_data
     logging.info('Requête VAPI reçue')
+    
+    # Récupérer le secret depuis les variables d'environnement
+    expected_secret = os.environ.get('VAPI_WEBHOOK_SECRET')
+    vapi_secret = req.headers.get('X-VAPI-SECRET')
+
+    # Vérification pour les requêtes POST
+    if req.method == "POST":
+        if not expected_secret or vapi_secret != expected_secret.lower():
+            return func.HttpResponse("Non autorisé", status_code=401)
     
     if req.method == "GET":
         # Afficher la dernière donnée reçue
