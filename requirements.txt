@@ -1,1 +1,5 @@
 azure-functions
+openai
+tiktoken
+tqdm
+azure-storage-queue
