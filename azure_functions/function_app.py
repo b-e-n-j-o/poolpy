@@ -2,6 +2,7 @@ import os
 import azure.functions as func
 import logging
 import json
+from azure.storage.queue import QueueClient
 
 app = func.FunctionApp()
 
@@ -21,7 +22,6 @@ def extract_call_features(data):
 
             "conversation_content": {
                 "summary": data["message"]["analysis"]["summary"],
-                "full_transcript": data["message"]["transcript"],
                 "structured_exchanges": data["message"]["analysis"]["structuredData"]["transcript"],
                 "media": {
                     "recording_url": data["message"]["recordingUrl"],
@@ -63,28 +63,6 @@ def extract_call_features(data):
                         "vapi": data["message"]["costBreakdown"]["vapi"]
                     }
                 }
-            },
-
-            "conversation_analysis": {
-                "messages_flow": [
-                    {
-                        "role": msg["role"],
-                        "content": msg["message"],
-                        "timestamp": msg["time"],
-                        "seconds_from_start": msg.get("secondsFromStart", None),
-                        "duration": msg.get("duration", None)
-                    }
-                    for msg in data["message"]["messages"]
-                    if msg["role"] in ["user", "bot"]
-                ],
-                "user_messages": [
-                    {
-                        "content": msg["message"],
-                        "timestamp": msg["time"]
-                    }
-                    for msg in data["message"]["messages"]
-                    if msg["role"] == "user"
-                ]
             }
         }
         return features
@@ -93,6 +71,35 @@ def extract_call_features(data):
             "error": f"Erreur lors de l'extraction des features: champ manquant {str(e)}",
             "status": "error"
         }
+
+def send_to_queue(processed_data):
+    """
+    Envoie les données traitées à la file d'attente Azure
+    """
+    try:
+        # Création du message pour la file d'attente
+        queue_message = {
+            "transcript_id": processed_data["call_metadata"]["call_id"],
+            "timestamp": processed_data["call_metadata"]["start_time"]
+        }
+        
+        # Inclure l'ensemble des données traitées
+        queue_message.update(processed_data)
+        
+        # Création du client pour la file d'attente
+        queue_client = QueueClient.from_connection_string(
+            os.environ["AzureWebJobsStorage"], 
+            "transcript-queue"
+        )
+        
+        # Envoi du message
+        queue_client.send_message(json.dumps(queue_message, ensure_ascii=False))
+        
+        logging.info(f"Message envoyé à la file d'attente pour le transcript {queue_message['transcript_id']}")
+        return True, "Message envoyé à la file d'attente avec succès"
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi à la file d'attente: {str(e)}")
+        return False, f"Erreur lors de l'envoi à la file d'attente: {str(e)}"
 
 # Variable globale pour stocker la dernière requête
 last_received_data = None
@@ -129,10 +136,15 @@ async def vapi_webhook(req: func.HttpRequest) -> func.HttpResponse:
         last_received_data = processed_data  # Sauvegarder les données traitées
         logging.info(f"Données traitées: {json.dumps(processed_data, indent=2)}")
         
+        # Envoi des données à la file d'attente pour traitement ultérieur
+        queue_success, queue_message = send_to_queue(processed_data)
+        
         return func.HttpResponse(
             body=json.dumps({
                 "processed_data": processed_data,
-                "message": "Données traitées avec succès"
+                "message": "Données traitées avec succès",
+                "queue_status": queue_message,
+                "queue_success": queue_success
             }, ensure_ascii=False, indent=2),
             mimetype="application/json",
             status_code=200
@@ -155,5 +167,3 @@ async def vapi_webhook(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
             status_code=500
         )
-
-# // test //
