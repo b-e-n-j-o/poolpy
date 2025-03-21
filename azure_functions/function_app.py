@@ -167,11 +167,5 @@ async def vapi_webhook(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
             status_code=500
         )
-
-@app.route(route="health", auth_level=func.AuthLevel.ANONYMOUS)
-async def health_check(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse(
-        body=json.dumps({"status": "ok", "message": "Fonction en ligne"}),
-        mimetype="application/json",
-        status_code=200
-    )
+    
+    
