@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: './functions/func-embedding-generator' # Chemin vers le dossier de la fonction
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './functions/func-embedding-generator'
   PYTHON_VERSION: '3.11'
 
 jobs:
@@ -32,19 +32,32 @@ jobs:
           python -m venv venv
           source venv/bin/activate
 
+      - name: Debug - List directory structure
+        run: |
+          echo "Current directory: $(pwd)"
+          find . -type f -name "requirements.txt" | sort
+
       - name: Install dependencies
-        run: pip install -r ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt
+        run: |
+          if [ -f "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt" ]; then
+            pip install -r ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt
+          else
+            echo "Requirements file not found at ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt"
+            exit 1
+          fi
 
       - name: Zip artifact for deployment
         run: |
-          cd $(dirname "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}")
-          zip -r release.zip ./func-embedding-generator/
+          mkdir -p ./artifact
+          cp -r ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/* ./artifact/
+          cd ./artifact
+          zip -r ../release.zip ./*
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: functions/release.zip
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -60,7 +73,9 @@ jobs:
           name: python-app
 
       - name: Unzip artifact for deployment
-        run: unzip release.zip
+        run: |
+          mkdir -p ./func-embedding-generator
+          unzip release.zip -d ./func-embedding-generator/
 
       - name: Login to Azure
         uses: azure/login@v2
