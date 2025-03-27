@@ -454,3 +454,5 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
         mimetype="application/json",
         status_code=200
     )
+
+# test
